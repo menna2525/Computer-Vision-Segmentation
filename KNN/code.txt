@@ -1,0 +1,61 @@
+import numpy as np
+import cv2
+# Select the image used for KNN:
+path = r'C:\Users\New-Amr\PyChram Projects\35058.jpg'
+img = cv2.imread(path, 1)
+cv2.imshow('image', img)
+h, w, s = img.shape
+segmented_img = np.zeros_like(img)
+k = 4
+obj_vote = 0
+bg_vote = 0
+
+# Take samples from original image for both object and background
+
+(ROI_bg_x, ROI_bg_y, ROI_bg_w, ROI_bg_h) = cv2.selectROI(img, showCrosshair=0)
+(ROI_obj_x, ROI_obj_y, ROI_obj_w, ROI_obj_h) = cv2.selectROI(img, showCrosshair=0)
+
+# Calculate the mean values for both object and background
+
+mean_bg = np.sum(img[ROI_bg_y:ROI_bg_y + ROI_bg_h, ROI_bg_x:ROI_bg_x + ROI_bg_w], axis=(0, 1), keepdims=True) / (
+            ROI_bg_h * ROI_bg_w)
+mean_obj = np.sum(img[ROI_obj_y:ROI_obj_y + ROI_obj_h, ROI_obj_x:ROI_obj_x + ROI_obj_w], axis=(0, 1), keepdims=True) / (
+            ROI_obj_h * ROI_obj_w)
+
+for m in range(h):
+    for n in range(w):
+        diff_obj = img[m, n] - img[ROI_obj_y:ROI_obj_y + ROI_obj_h, ROI_obj_x:ROI_obj_x + ROI_obj_w]
+        distance_obj = np.linalg.norm(diff_obj, axis=2)
+        diff_bg = img[m, n] - img[ROI_bg_y:ROI_bg_y + ROI_bg_h, ROI_bg_x:ROI_bg_x + ROI_bg_w]
+        distance_bg = np.linalg.norm(diff_bg, axis=2)
+        distance = [np.min(distance_obj), np.min(distance_bg)]
+
+        # Based on the value of K the loop is repeated
+
+        for i in range(k):
+            # Calculate the distance
+            if min(distance) == np.min(distance_obj):
+                index = np.where(distance_obj == np.min(distance_obj))
+                distance_obj[index[0], index[1]] = 1000
+                obj_vote = obj_vote + 1
+            elif min(distance) == np.min(distance_bg):
+                index = np.where(distance_bg == np.min(distance_bg))
+                distance_bg[index[0], index[1]] = 1000
+                bg_vote = bg_vote + 1
+# Compare between votes:
+        vote = [obj_vote, bg_vote]
+        if max(vote) == obj_vote:
+            segmented_img[m, n] = mean_obj
+        elif max(vote) == bg_vote:
+            segmented_img[m, n] = mean_bg
+        else:
+            segmented_img[m, n] = segmented_img[m, n - 1]
+        # Replace the min distance with larger one so it won't be considered again
+        min_distance_bg = 1000
+        min_distance_obj = 1000
+        # Clear votes every time the pixel is added to either object or background
+        obj_vote = 0
+        bg_vote = 0
+
+cv2.imshow('Segmented Image', segmented_img)
+cv2.waitKey(0)

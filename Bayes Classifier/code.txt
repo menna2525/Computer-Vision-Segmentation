@@ -1,0 +1,102 @@
+import numpy as np
+import cv2
+import math
+
+# Pick the image used for Bayes Classifier:
+path = r'C:\Users\New-Amr\PyChram Projects\41033.jpg'
+img = cv2.imread(path, 1)
+cv2.imshow('Original Image', img)
+h, w, s = img.shape
+
+# Get THREE samples for the image --> one for object, and two for the background to ensure the result
+
+(ROI_bg_x, ROI_bg_y, ROI_bg_w, ROI_bg_h) = cv2.selectROI(img, showCrosshair=0)
+(ROI_obj_x, ROI_obj_y, ROI_obj_w, ROI_obj_h) = cv2.selectROI(img, showCrosshair=0)
+
+mean_bg = np.sum(img[ROI_bg_y:ROI_bg_y + ROI_bg_h, ROI_bg_x:ROI_bg_x + ROI_bg_w], axis=(0, 1),
+                  keepdims=True) / (ROI_bg1_h * ROI_bg1_w)
+mean_obj = np.sum(img[ROI_obj_y:ROI_obj_y + ROI_obj_h, ROI_obj_x:ROI_obj_x + ROI_obj_w], axis=(0, 1),
+                  keepdims=True) / (ROI_obj_h * ROI_obj_w)
+
+# Calculate the covariance of objet
+P_obj_matrix = np.array(img[ROI_obj_y:ROI_obj_y + ROI_obj_h, ROI_obj_x:ROI_obj_x + ROI_obj_w])
+sum_obj = 0
+
+for x in range(P_obj_matrix.shape[0]):
+    for y in range(P_obj_matrix.shape[1]):
+        a1 = np.reshape(P_obj_matrix[x, y, :], (3, 1))
+        a2 = np.reshape(mean_obj, (3, 1))
+        a3 = np.reshape(P_obj_matrix[x, y, :], (1, 3))
+        a4 = np.reshape(mean_obj, (1, 3))
+
+        b1 = (a1 - a2) * (a3 - a4)
+        sum_obj = b1 + sum_obj
+
+
+obj_cov = sum_obj / (P_obj_matrix.shape[0] * P_obj_matrix.shape[1])
+
+
+
+##############
+# Calculate covariance of background 
+
+P_bg_matrix = np.array(img[ROI_bg_y:ROI_bg_y + ROI_bg_h, ROI_bg_x:ROI_bg_x + ROI_bg_w])
+sum_bg = 0
+for x in range(P_bg_matrix.shape[0]):
+    for y in range(P_bg1_matrix.shape[1]):
+        a1 = np.reshape(P_bg_matrix[x, y, :], (3, 1))
+        a2 = np.reshape(mean_bg, (3, 1))
+        a3 = np.reshape(P_bg_matrix[x, y, :], (1, 3))
+        a4 = np.reshape(mean_bg, (1, 3))
+
+        b1 = (a1 - a2) * (a3 - a4)
+        sum_bg = b1 + sum_bg
+
+bg_cov = sum_bg / (P_bg_matrix.shape[0] * P_bg_matrix.shape[1])
+
+##################
+
+##############
+# Calculate likehood
+
+segmented_img = np.zeros_like(img)
+P_O = np.zeros_like(img)
+P_bg1 = np.zeros_like(img)
+
+for l in range(img.shape[0]):
+    for t in range(img.shape[1]):
+        a1 = np.reshape(img[l, t, :], (3, 1))
+        a2 = np.reshape(img[l, t, :], (1, 3))
+        b1 = np.reshape(mean_obj, (3, 1))
+        b2 = np.reshape(mean_obj, (1, 3))
+        c = a1 - b1
+        c1 = a2 - b2
+        c111 = np.linalg.inv(obj_cov)
+        c11 = np.dot(c1, c111)
+        c1111 = np.dot(c11, c)
+       
+        ################
+        a11 = np.reshape(img[l, t, :], (3, 1))
+        a22 = np.reshape(img[l, t, :], (1, 3))
+        b11 = np.reshape(mean_bg, (3, 1))
+        b22 = np.reshape(mean_bg, (1, 3))
+        d = a11 - b11
+        d1 = a22 - b22
+        d111 = np.linalg.inv(bg_cov)
+        d11 = np.dot(d1, d111)
+        d1111 = np.dot(d11, d)
+       
+
+        ###############################
+       
+        P_O= -3 / 2 * math.log(2 * math.pi) - 0.5 * math.log(abs(np.linalg.det(obj_cov))) - 0.5 * c1111
+        P_bg = -3 / 2 * math.log(2 * math.pi) - 0.5 * math.log(abs(np.linalg.det(bg_cov))) - 0.5 * d1111
+
+        if 0.6 * P_O > 0.4 * P_bg:
+            segmented_img[l, t] = mean_obj
+        else:
+            segmented_img[l, t] = mean_bg
+
+
+cv2.imshow('Segmented Image', segmented_img)
+cv2.waitKey(0)
